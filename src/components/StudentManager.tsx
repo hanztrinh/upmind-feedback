@@ -2,16 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '@/lib/supabase';
-import { Student } from '@/types';
+import { Student, SUBJECTS } from '@/types';
 
 export default function StudentManager() {
   const [students, setStudents] = useState<Student[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string;
+    subject: string;
+    grade: number;
+    parent_name: string;
+    parent_phone: string;
+    parent_zalo: string;
+    teacher_name: string;
+  }>({
     name: '',
-    subject: '',
+    subject: SUBJECTS[0],
     grade: 9,
     parent_name: '',
     parent_phone: '',
@@ -19,6 +27,7 @@ export default function StudentManager() {
     teacher_name: '',
   });
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState({ msg: '', isError: false });
 
   useEffect(() => {
     loadStudents();
@@ -35,7 +44,7 @@ export default function StudentManager() {
   function resetForm() {
     setForm({
       name: '',
-      subject: '',
+      subject: SUBJECTS[0],
       grade: 9,
       parent_name: '',
       parent_phone: '',
@@ -63,16 +72,52 @@ export default function StudentManager() {
   async function handleSave() {
     if (!form.name || !form.subject) return;
     setSaving(true);
+    setToast({ msg: '', isError: false });
 
-    if (editingId) {
-      await getSupabase().from('students').update(form).eq('id', editingId);
-    } else {
-      await getSupabase().from('students').insert(form);
+    try {
+      const sb = getSupabase();
+      // Clean empty strings to null for optional fields
+      const payload = {
+        name: form.name.trim(),
+        subject: form.subject,
+        grade: form.grade,
+        parent_name: form.parent_name.trim() || null,
+        parent_phone: form.parent_phone.trim() || null,
+        parent_zalo: form.parent_zalo.trim() || null,
+        teacher_name: form.teacher_name.trim() || null,
+      };
+
+      let error;
+      if (editingId) {
+        ({ error } = await sb.from('students').update(payload).eq('id', editingId));
+      } else {
+        ({ error } = await sb.from('students').insert(payload));
+      }
+
+      if (error) {
+        throw error;
+      }
+
+      setShowForm(false);
+      setEditingId(null);
+      setToast({ msg: editingId ? 'Đã cập nhật' : 'Đã thêm học sinh', isError: false });
+      setForm({
+        name: '',
+        subject: SUBJECTS[0],
+        grade: 9,
+        parent_name: '',
+        parent_phone: '',
+        parent_zalo: '',
+        teacher_name: '',
+      });
+      await loadStudents();
+    } catch (err: any) {
+      console.error('Save error:', err);
+      setToast({ msg: 'Lỗi: ' + (err?.message || JSON.stringify(err)), isError: true });
     }
 
     setSaving(false);
-    resetForm();
-    loadStudents();
+    setTimeout(() => setToast({ msg: '', isError: false }), 5000);
   }
 
   async function toggleActive(s: Student) {
@@ -143,12 +188,15 @@ export default function StudentManager() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
-            <input
-              placeholder="Môn học *"
+            <select
               value={form.subject}
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
-              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+            >
+              {SUBJECTS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
             <select
               value={form.grade}
               onChange={(e) => setForm({ ...form, grade: Number(e.target.value) })}
@@ -200,6 +248,9 @@ export default function StudentManager() {
               Huỷ
             </button>
           </div>
+          {toast.isError && toast.msg && (
+            <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg mt-2">{toast.msg}</div>
+          )}
         </div>
       )}
 
@@ -244,6 +295,15 @@ export default function StudentManager() {
           </div>
         ))}
       </div>
+
+      {/* Toast */}
+      {toast.msg && (
+        <div className={`mt-4 text-center text-sm py-2 px-4 rounded-lg ${
+          toast.isError ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+        }`}>
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }

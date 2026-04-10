@@ -69,3 +69,5 @@ export const CRITERIA = [
 ] as const;
 
 export type CriteriaKey = typeof CRITERIA[number]['key'];
+
+export const SUBJECTS = ['Toán', 'KHTN', 'Vật lý', 'Hóa học'] as const;
